@@ -1,5 +1,5 @@
 import json
-import logging
+import logging.handlers
 import socket
 from typing import Any, Dict, Optional, Tuple
 import warnings
@@ -78,3 +78,26 @@ class GelfFormatter(logging.Formatter):
                 continue
             fields[f'_{name}'] = value
         return self.to_json(fields)
+
+
+class BaseGelfHandler(logging.Handler):
+
+    def setFormatter(self, formatter):
+        if not isinstance(formatter, GelfFormatter):
+            raise TypeError(
+                f"{type(self).__name__}'s formatter must be instance of "
+                f"GelfFormatter or it's subclass"
+            )
+        super().setFormatter(formatter)
+
+    def format(self, record):
+        if self.formatter is None:
+            self.formatter = GelfFormatter()
+        return self.formatter.format(record)
+
+
+class GelfTcpHandler(BaseGelfHandler, logging.handlers.SocketHandler):
+    # https://docs.graylog.org/en/3.2/pages/gelf.html#gelf-via-tcp
+
+    def makePickle(self, record):
+        return self.format(record).encode('utf-8') + b'\0'
