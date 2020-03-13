@@ -1,19 +1,46 @@
 import json
 import logging.handlers
 import socket
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Mapping, Tuple, Union
 import warnings
 
 
+_STD_RECORD_ATTRS = set(
+    logging.LogRecord(None, None, "", 0, "", (), None, None).__dict__
+)
+
+
 class GelfFormatter(logging.Formatter):
+    """ Format record in GELF format (JSON string) """
 
     version = '1.1'
     json_default = str
 
-    def __init__(self, host=None):
-        if host is None:
-            host = socket.gethostname()
-        self.host = host
+    def __init__(
+        self, *,
+        record_fields: Union[Iterable[str], Mapping[str, str]] = ('name',),
+        fixed_fields: Mapping[str, Any] = {},
+        include_extra_fields = False,
+    ):
+        """
+        :param record_fields: either sequence of mapping of LogRecord
+        additional field names or mapping of LogRecord field names to
+        field names in Graylog.
+
+        :param fixed_fields: mapping of additional field names to values for
+        extra fields with fixed values.
+
+        :param include_extra_fields: whether to include all extra record fields
+        """
+        self.host = self.get_host()
+        if not isinstance(record_fields, Mapping):
+            record_fields = {name: name for name in record_fields}
+        self.record_fields = record_fields
+        self.fixed_fields = fixed_fields
+        self.include_extra_fields = include_extra_fields
+
+    def get_host(self):
+        return socket.gethostname()
 
     def get_level(self, record) -> int:
         """ Return Graylog level (= standard syslog level) """
@@ -62,8 +89,19 @@ class GelfFormatter(logging.Formatter):
             **self.get_message_fields(record),
         }
 
-    def get_extension_fields(self, record):
-        return {}
+    def get_additional_fields(self, record):
+        fields = dict(self.fixed_fields)
+
+        all_attr_names = set(record.__dict__)
+        record_attr_names = set(self.record_fields) & all_attr_names
+        if self.include_extra_fields:
+            record_attr_names |= all_attr_names - _STD_RECORD_ATTRS
+
+        for attr_name in record_attr_names:
+            graylog_name = self.record_fields.get(attr_name, attr_name)
+            fields[graylog_name] = getattr(record, attr_name)
+
+        return fields
 
     def to_json(self, fields: Dict[str, Any]):
         return json.dumps(
@@ -72,7 +110,7 @@ class GelfFormatter(logging.Formatter):
 
     def format(self, record):
         fields = self.get_gelf_fields(record)
-        for name, value in self.get_extension_fields(record):
+        for name, value in self.get_additional_fields(record).items():
             if name == 'id':
                 warnings.warn('"id" field is not allowed in GELF')
                 continue
