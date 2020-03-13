@@ -16,6 +16,7 @@ class GelfFormatter(logging.Formatter):
         self.host = host
 
     def get_level(self, record) -> int:
+        """ Return Graylog level (= standard syslog level) """
         for threshold, gelf_level in [
             (logging.CRITICAL, 2),
             (logging.ERROR,    3),
@@ -26,41 +27,40 @@ class GelfFormatter(logging.Formatter):
                 return gelf_level
         return 7
 
-    def get_exception(self, record) -> Optional[str]:
-        # Code for exception is copy-pasted from `logging.Formatter` class
-        if record.exc_info:
-            # Cache the traceback text to avoid converting it multiple times
-            # (it's constant anyway)
-            if not record.exc_text:
-                record.exc_text = self.formatException(record.exc_info)
-        return record.exc_text
-
     def get_message(self, record) -> Tuple[str, Optional[str]]:
         """ Return `short_message, full_message` pair """
-        message = record.getMessage().strip('\n')
-        exception = self.get_exception(record)
-        if exception:
-            message = f'{message}\n\n{exception}'
+        message = record.getMessage().rstrip('\n')
 
+        # Caching like in `logging.Formatter` class
+        if record.exc_info and not record.exc_text:
+            record.exc_text = self.formatException(record.exc_info)
+        if record.exc_text:
+            message = f'{message}\n\n{record.exc_text}'.rstrip('\n')
+
+        if record.stack_info:
+            message = f'{message}\n\n{self.formatStack(record.stack_info)}'
+
+        return message
+
+    def get_message_fields(self, record):
+        message = self.get_message(record)
         if '\n' in message:
-            short_message = message.split('\n', 1)[0]
-            return short_message, message
+            return {
+                'short_message': message.split('\n', 1)[0],
+                'full_message': message,
+            }
         else:
-            return message, None
+            return {'short_message': message}
 
     def get_gelf_fields(self, record):
         # https://docs.graylog.org/en/3.2/pages/gelf.html#gelf-payload-specification
-        short_message, full_message = self.get_message(record)
-        fields = {
+        return {
             'version': self.version,
             'host': self.host,
-            'short_message': short_message,
             'timestamp': record.created,
             'level': self.get_level(record),
+            **self.get_message_fields(record),
         }
-        if full_message:
-            fields['full_message'] = full_message
-        return fields
 
     def get_extension_fields(self, record):
         return {}
