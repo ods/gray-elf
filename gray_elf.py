@@ -39,10 +39,12 @@ class GelfFormatter(logging.Formatter):
         self.fixed_fields = fixed_fields
         self.include_extra_fields = include_extra_fields
 
-    def get_host(self):
+    @staticmethod
+    def get_host():
         return socket.gethostname()
 
-    def get_level(self, record) -> int:
+    @staticmethod
+    def get_level(record) -> int:
         """ Return Graylog level (= standard syslog level) """
         for threshold, gelf_level in [
             (logging.CRITICAL, 2),
