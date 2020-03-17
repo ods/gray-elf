@@ -35,8 +35,10 @@ class GelfFormatter(logging.Formatter):
         self.host = self.get_host()
         if not isinstance(record_fields, Mapping):
             record_fields = {name: name for name in record_fields}
+        else:
+            record_fields = dict(record_fields)
         self.record_fields = record_fields
-        self.fixed_fields = fixed_fields
+        self.fixed_fields = dict(fixed_fields)
         self.include_extra_fields = include_extra_fields
 
     @staticmethod
