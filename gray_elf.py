@@ -1,8 +1,28 @@
+from functools import partial
+import gzip
 import json
 import logging.handlers
+import os
 import socket
-from typing import Any, Dict, Iterable, Optional, Mapping, Tuple, Union
+from typing import (
+    Any, Callable, Dict, Iterable, Optional, Mapping, Tuple, Union,
+)
 import warnings
+
+
+COMPRESS_NONE = lambda data: data
+COMPRESS_GZIP = partial(gzip.compress, compresslevel=3)
+
+CHUNK_SIZE_MIN = 16  # > header (12 bytes)
+CHUNK_SIZE_MAX = 65536
+CHUNK_SIZE_DEFAULT = 8192  # Supported by all components
+
+
+class InvalidField(Warning):
+    pass
+
+class MessageTooLarge(Warning):
+    pass
 
 
 _STD_RECORD_ATTRS = set(
@@ -116,7 +136,9 @@ class GelfFormatter(logging.Formatter):
         fields = self.get_gelf_fields(record)
         for name, value in self.get_additional_fields(record).items():
             if name == 'id':
-                warnings.warn('"id" field is not allowed in GELF')
+                warnings.warn(
+                    '"id" field is not allowed in GELF', category=InvalidField,
+                )
                 continue
             fields[f'_{name}'] = value
         return self.to_json(fields)
@@ -143,3 +165,59 @@ class GelfTcpHandler(BaseGelfHandler, logging.handlers.SocketHandler):
 
     def makePickle(self, record):
         return self.format(record).encode('utf-8') + b'\0'
+
+
+_CHUNKED_MAGIC = b'\x1e\x0f'
+_CHUNKED_HEADER_SIZE = 12  # 2 magic, 8 message_id, 1 index, 1 count
+_CHUNKS_COUNT_MAX = 128
+
+
+class GelfUdpHandler(BaseGelfHandler, logging.handlers.DatagramHandler):
+    # https://docs.graylog.org/en/3.2/pages/gelf.html#gelf-via-udp
+
+    def __init__(
+        self, host, port,
+        compress: Optional[Callable[[bytes], bytes]] = COMPRESS_GZIP,
+        chunk_size: int = CHUNK_SIZE_DEFAULT,
+    ):
+        super().__init__(host, port)
+        if compress is None:
+            compress = COMPRESS_NONE
+        self.compress = compress
+        if not CHUNK_SIZE_MIN <= chunk_size <= CHUNK_SIZE_MAX:
+            raise ValueError('Invalid chunk_size')
+        self.chunk_size = chunk_size
+
+    def makePickle(self, record):
+        return self.compress(self.format(record).encode('utf-8'))
+
+    def send(self, data: bytes):
+        for chunk in chunked(data, self.chunk_size):
+            super().send(chunk)
+
+
+def chunked(data: bytes, chunk_size: int):
+    length = len(data)
+    if length > chunk_size:
+        chunk_data_size = chunk_size - _CHUNKED_HEADER_SIZE
+        max_size = chunk_data_size * _CHUNKS_COUNT_MAX
+        if length > max_size:
+            warnings.warn(
+                f'Message is too large ({length} > {max_size}). '
+                    f'Try increasing chunk_size parameter',
+                category=MessageTooLarge,
+            )
+            return
+
+        message_id = os.urandom(8)
+        starts = range(0, length, chunk_data_size)
+        chunks_count = len(starts)
+        for index, start in enumerate(starts):
+            yield b''.join([
+                _CHUNKED_MAGIC,
+                message_id,
+                bytes([index, chunks_count]),
+                data[start:start+chunk_data_size],
+            ])
+    else:
+        yield data
