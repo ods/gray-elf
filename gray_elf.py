@@ -193,7 +193,7 @@ class GelfUdpHandler(BaseGelfHandler, logging.handlers.DatagramHandler):
 
     def send(self, data: bytes):
         for chunk in chunked(data, self.chunk_size):
-            super().send(chunk)
+            logging.handlers.DatagramHandler.send(self, chunk)
 
 
 def chunked(data: bytes, chunk_size: int):
