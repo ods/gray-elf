@@ -5,7 +5,7 @@ from time import time
 
 import pytest
 
-from gray_elf import GelfFormatter
+from gray_elf import GelfFormatter, InvalidField
 
 
 DEFAULT_MESSAGE = 'Message with 2 placeholders'
@@ -134,7 +134,7 @@ def test_id_field(host, include_extra_fields):
     )
     record = get_record()
     record.source_field = 123
-    with pytest.warns(UserWarning):
+    with pytest.warns(InvalidField):
         formatted = formatter.format(record)
     data = json.loads(formatted)
     assert data == {
