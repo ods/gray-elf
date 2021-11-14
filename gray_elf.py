@@ -26,7 +26,7 @@ class MessageTooLarge(Warning):
 
 
 _STD_RECORD_ATTRS = set(
-    logging.LogRecord(None, None, "", 0, "", (), None, None).__dict__
+    logging.LogRecord("", 0, "", 0, "", (), None, None).__dict__
 )
 
 
@@ -78,8 +78,8 @@ class GelfFormatter(logging.Formatter):
                 return gelf_level
         return 7
 
-    def get_message(self, record) -> Tuple[str, Optional[str]]:
-        """ Return `short_message, full_message` pair """
+    def get_message(self, record) -> str:
+        """ Return full log message """
         message = record.getMessage().rstrip('\n')
 
         # Caching like in `logging.Formatter` class
