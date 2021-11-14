@@ -25,7 +25,7 @@ class MessageTooLarge(Warning):
     pass
 
 
-_STD_RECORD_ATTRS = set(
+_STD_RECORD_ATTRS = frozenset(
     logging.LogRecord("", 0, "", 0, "", (), None, None).__dict__
 )
 
