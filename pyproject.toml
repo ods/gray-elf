@@ -1,0 +1,63 @@
+[project]
+name = "gray-elf"
+description = "Python logging formatter and handlers for Graylog Extended Log Format (GELF)"
+requires-python = ">= 3.7"
+keywords = ["graylog", "gelf", "logging"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: System :: Logging",
+]
+dependencies = []
+dynamic = ["version"]
+
+[project.readme]
+file = "README.rst"
+content-type = "text/x-rst"
+
+[project.license]
+text = "MIT"
+
+[[project.authors]]
+name = "Denis Otkidach"
+email = "denis.otkidach@gmail.com"
+
+[project.urls]
+repository = "https://github.com/ods/gray-elf"
+changelog = "https://github.com/ods/gray-elf/blob/master/CHANGELOG.rst"
+
+[project.optional-dependencies]
+test = [
+    "pytest >= 6.2.0",
+    "pytest-asyncio >= 0.14.0",
+    "pytest-cov >= 2.11.1",
+]
+
+[build-system]
+requires = [
+    "setuptools >= 45",
+    "setuptools_scm >= 6.2",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py_modules = "gray_elf"
+
+[tool.setuptools_scm]
+
+[tool.pytest]
+testpaths = "tests"
+addopts = "--strict-markers -r aP --tb=native"
+filterwarnings = "error"
+
+[tool.coverage.run]
+branch = true
+source = ["gray_elf"]
