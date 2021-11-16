@@ -5,7 +5,7 @@ import logging.handlers
 import os
 import socket
 from typing import (
-    Any, Callable, Dict, Iterable, Optional, Mapping, Tuple, Union,
+    Any, Callable, Dict, Iterable, Optional, Mapping, Union,
 )
 import warnings
 
