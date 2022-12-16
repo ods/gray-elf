@@ -9,7 +9,7 @@ from gray_elf import chunked, MessageTooLarge
     b'',
     b'0123456789abcdef',
 ])
-def test_fits_in_one(message):
+def test_fits_in_one(message: bytes) -> None:
     chunks = list(chunked(message, 16))
     assert chunks == [message]
 
@@ -24,7 +24,7 @@ def test_fits_in_one(message):
         b'\x04\x050123',
     ]),
 ])
-def test_normal(message, tails):
+def test_normal(message: bytes, tails: bytes) -> None:
     chunks = list(chunked(message, 16))
     assert all(chunk.startswith(b'\x1e\x0f') for chunk in chunks)
     message_ids = set(chunk[2:10] for chunk in chunks)
@@ -34,7 +34,7 @@ def test_normal(message, tails):
         assert chunk[10:] == tail
 
 
-def test_max_count():
+def test_max_count() -> None:
     chunks = list(chunked(b'0123' * 128, 16))
     assert len(chunks) == 128
 

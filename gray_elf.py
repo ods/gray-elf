@@ -5,7 +5,7 @@ import logging.handlers
 import os
 import socket
 from typing import (
-    Any, Callable, Dict, Iterable, Optional, Mapping, Union,
+    Any, Callable, Dict, Generator, Iterable, Optional, Mapping, Union,
 )
 import warnings
 
@@ -40,8 +40,8 @@ class GelfFormatter(logging.Formatter):
         self, *,
         record_fields: Union[Iterable[str], Mapping[str, str]] = ('name',),
         fixed_fields: Mapping[str, Any] = {},
-        include_extra_fields = False,
-    ):
+        include_extra_fields: bool = False,
+    ) -> None:
         """
         :param record_fields: either sequence of mapping of LogRecord
         additional field names or mapping of LogRecord field names to
@@ -62,11 +62,11 @@ class GelfFormatter(logging.Formatter):
         self.include_extra_fields = include_extra_fields
 
     @staticmethod
-    def get_host():
+    def get_host() -> str:
         return socket.gethostname()
 
     @staticmethod
-    def get_level(record) -> int:
+    def get_level(record: logging.LogRecord) -> int:
         """ Return Graylog level (= standard syslog level) """
         for threshold, gelf_level in [
             (logging.CRITICAL, 2),
@@ -78,7 +78,7 @@ class GelfFormatter(logging.Formatter):
                 return gelf_level
         return 7
 
-    def get_message(self, record) -> str:
+    def get_message(self, record: logging.LogRecord) -> str:
         """ Return full log message """
         message = record.getMessage().rstrip('\n')
 
@@ -93,7 +93,7 @@ class GelfFormatter(logging.Formatter):
 
         return message
 
-    def get_message_fields(self, record):
+    def get_message_fields(self, record: logging.LogRecord) -> dict[str, Any]:
         message = self.get_message(record)
         if '\n' in message:
             return {
@@ -103,7 +103,7 @@ class GelfFormatter(logging.Formatter):
         else:
             return {'short_message': message}
 
-    def get_gelf_fields(self, record):
+    def get_gelf_fields(self, record: logging.LogRecord) -> dict[str, Any]:
         # https://docs.graylog.org/en/3.2/pages/gelf.html#gelf-payload-specification
         return {
             'version': self.version,
@@ -113,7 +113,7 @@ class GelfFormatter(logging.Formatter):
             **self.get_message_fields(record),
         }
 
-    def get_additional_fields(self, record):
+    def get_additional_fields(self, record: logging.LogRecord) -> dict[str, Any]:
         fields = dict(self.fixed_fields)
 
         all_attr_names = set(record.__dict__)
@@ -127,12 +127,12 @@ class GelfFormatter(logging.Formatter):
 
         return fields
 
-    def to_json(self, fields: Dict[str, Any]):
+    def to_json(self, fields: Dict[str, Any]) -> str:
         return json.dumps(
             fields, separators=(',', ':'), default=self.json_default,
         )
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         fields = self.get_gelf_fields(record)
         for name, value in self.get_additional_fields(record).items():
             if name == 'id':
@@ -146,7 +146,7 @@ class GelfFormatter(logging.Formatter):
 
 class BaseGelfHandler(logging.Handler):
 
-    def setFormatter(self, formatter):
+    def setFormatter(self, formatter: Optional[logging.Formatter]) -> None:
         if not isinstance(formatter, GelfFormatter):
             raise TypeError(
                 f"{type(self).__name__}'s formatter must be instance of "
@@ -154,7 +154,7 @@ class BaseGelfHandler(logging.Handler):
             )
         super().setFormatter(formatter)
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         if self.formatter is None:
             self.formatter = GelfFormatter()
         return self.formatter.format(record)
@@ -163,7 +163,7 @@ class BaseGelfHandler(logging.Handler):
 class GelfTcpHandler(BaseGelfHandler, logging.handlers.SocketHandler):
     # https://docs.graylog.org/en/3.2/pages/gelf.html#gelf-via-tcp
 
-    def makePickle(self, record):
+    def makePickle(self, record: logging.LogRecord) -> bytes:
         return self.format(record).encode('utf-8') + b'\0'
 
 
@@ -176,7 +176,9 @@ class GelfUdpHandler(BaseGelfHandler, logging.handlers.DatagramHandler):
     # https://docs.graylog.org/en/3.2/pages/gelf.html#gelf-via-udp
 
     def __init__(
-        self, host, port,
+        self,
+        host: str,
+        port: Optional[int],
         compress: Optional[Callable[[bytes], bytes]] = COMPRESS_GZIP,
         chunk_size: int = CHUNK_SIZE_DEFAULT,
     ):
@@ -188,15 +190,15 @@ class GelfUdpHandler(BaseGelfHandler, logging.handlers.DatagramHandler):
             raise ValueError('Invalid chunk_size')
         self.chunk_size = chunk_size
 
-    def makePickle(self, record):
+    def makePickle(self, record: logging.LogRecord) -> bytes:
         return self.compress(self.format(record).encode('utf-8'))
 
-    def send(self, data: bytes):
+    def send(self, data: bytes) -> None:
         for chunk in chunked(data, self.chunk_size):
             logging.handlers.DatagramHandler.send(self, chunk)
 
 
-def chunked(data: bytes, chunk_size: int):
+def chunked(data: bytes, chunk_size: int) -> Generator[bytes, None, None]:
     length = len(data)
     if length > chunk_size:
         chunk_data_size = chunk_size - _CHUNKED_HEADER_SIZE
