@@ -193,7 +193,10 @@ class GelfUdpHandler(BaseGelfHandler, logging.handlers.DatagramHandler):
     def makePickle(self, record: logging.LogRecord) -> bytes:
         return self.compress(self.format(record).encode('utf-8'))
 
-    def send(self, data: bytes) -> None:
+    # Actually `data` can be any `collections.abc.Buffer` object, but it's
+    # available from Python 3.12 and can't be expressed without hacks in prior
+    # versions.  This is not assumed as external interface, so we don't care.
+    def send(self, data: bytes) -> None:  # type: ignore[override]
         for chunk in chunked(data, self.chunk_size):
             logging.handlers.DatagramHandler.send(self, chunk)
 
